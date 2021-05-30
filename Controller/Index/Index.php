@@ -36,6 +36,12 @@ class Index extends Checkout
             $paymentId = $this->getRequest()->getParam("paymentid");
         }
 
+        $logContext = [
+            'params' => $this->getRequest()->getParams(),
+            'payment_id' => $paymentId,
+        ];
+        $this->dibsCheckout->getLogger()->info('Dibs index', $logContext);
+
         // if the customer has payed with card and is redirected back here
         if ($paymentId) {
             try {
@@ -45,6 +51,7 @@ class Index extends Checkout
                     return $this->_redirect($checkout->getHelper()->getSuccessPageUrl());
                 }
             } catch (CheckoutException $e) {
+                $this->dibsCheckout->getLogger()->error('Dibs index check order should be saved error - ' . $e->getMessage(), $logContext);
                 if ($e->isReload()) {
                     $this->messageManager->addNoticeMessage($e->getMessage());
                 } else {
@@ -66,6 +73,7 @@ class Index extends Checkout
             $checkout->initCheckout(false); // magento business logic
             $dibsPayment = $checkout->initDibsCheckout($integrationType); // handles magento and DIBS business logic
         } catch (CheckoutException $e) {
+            $this->dibsCheckout->getLogger()->error('Dibs index init error - ' . $e->getMessage(), $logContext);
             if ($e->isReload()) {
                 $this->messageManager->addNoticeMessage($e->getMessage());
             } else {
@@ -83,9 +91,11 @@ class Index extends Checkout
                 return;
             }
         } catch (\Exception $e) {
+            $this->dibsCheckout->getLogger()->critical(
+                'Dibs index init error - ' . $e->getMessage(),
+                $logContext + ['trace' => (string)$e]
+            );
             $this->messageManager->addErrorMessage($e->getMessage() ? $e->getMessage() : __('Cannot initialize Nets Easy Checkout (%1)', get_class($e)));
-            $checkout->getLogger()->error("[" . __METHOD__ . "] (" . get_class($e) . ") {$e->getMessage()} ");
-            $checkout->getLogger()->critical($e);
 
             $this->_redirect(self::cartPath);
             return;
@@ -109,13 +119,13 @@ class Index extends Checkout
             $unsetPayment = false;
             // THIS might happen if the store owner changes integration flow, when a customer already started with the old flow!, for embedded
             if (!$checkoutUrl && !$useIframe) {
-                $checkout->getLogger()->error("Cannot initialize Nets Easy Checkout! Hosted flow chosen but no checkout URL is returned from Dibs.");
+                $checkout->getLogger()->error("Dibs index init error - Cannot initialize Nets Easy Checkout! Hosted flow chosen but no checkout URL is returned from Dibs.", $logContext);
                 $unsetPayment = true;
             }
 
             // THIS might also happen when store owner changes integration flow, when a customer already started the old flow, but for hosted
             if ($useIframe && $checkoutUrl) {
-                $checkout->getLogger()->error("Cannot initialize Nets Easy Checkout! Embedded flow chosen but checkout URL is returned from Dibs.");
+                $checkout->getLogger()->error("Dibs index init error - Cannot initialize Nets Easy Checkout! Embedded flow chosen but checkout URL is returned from Dibs.", $logContext);
                 $unsetPayment = true;
             }
 
@@ -140,6 +150,7 @@ class Index extends Checkout
             $q = $this->getDibsCheckout()->getQuote();
 
             if (!$q->isVirtual() && $q->getShippingAddress() && !$q->getShippingAddress()->getShippingMethod()) {
+                $this->dibsCheckout->getLogger()->error('Dibs index error - no shipping method', $logContext);
                 if ($isOverlayType) {
                     $this->_redirect(self::magentoCheckout);
                     return;
@@ -196,6 +207,7 @@ class Index extends Checkout
         $checkout->setCheckoutContext($this->dibsCheckoutContext);
 
         if ($this->getRequest()->getParam('paymentFailed')) {
+            $this->dibsCheckout->getLogger()->error('Dibs index - payment failed');
             throw new CheckoutException(__("The payment was canceled or failed."), '*/*');
         }
 

@@ -134,13 +134,14 @@ abstract class Client
 
 
             if ($this->testMode) {
-                $this->getLogger()->info("Sending request to dibs integration: POST $endpoint");
-                $this->getLogger()->info($request->toJSON());
-
-                $this->getLogger()->info("Response Headers from dibs:");
-                $this->getLogger()->info(json_encode($result->getHeaders()));
-                $this->getLogger()->info("Response Body from dibbs:");
-                $this->getLogger()->info($content);
+                $this->getLogger()->info(
+                    "Sending request to dibs integration: POST $endpoint",
+                    [
+                        'request' => $request->toJSON(),
+                        'headers' => $result->getHeaders(),
+                        'response' => $content,
+                    ]
+                );
             }
 
             return $content;
@@ -151,12 +152,15 @@ abstract class Client
         }
 
         if ($exception) {
-            $this->getLogger()->error("Failed sending request to dibs integration: POST $endpoint");
-            $this->getLogger()->error(json_encode($this->removeAuthForLogging($options)));
-            $this->getLogger()->error($request->toJSON());
-            $this->getLogger()->error($exception->getMessage());
-            $this->getLogger()->error($exception->getHttpStatusCode());
-            $this->getLogger()->error($exception->getResponseBody());
+            $this->getLogger()->error(
+                "Failed sending request to dibs integration: POST $endpoint - " . $exception->getMessage(),
+                [
+                    'options' => $this->removeAuthForLogging($options),
+                    'request' => $request->toJSON(),
+                    'status_code' => $exception->getHttpStatusCode(),
+                    'response' => $exception->getResponseBody(),
+                ]
+            );
             throw $exception;
         }
 
@@ -183,13 +187,14 @@ abstract class Client
             $content =  $result->getBody()->getContents();
 
             if ($this->testMode) {
-                $this->getLogger()->info("Sending request to dibs integration: PUT $endpoint");
-                $this->getLogger()->info($request->toJSON());
-
-                $this->getLogger()->info("Response Headers from dibs:");
-                $this->getLogger()->info(json_encode($result->getHeaders()));
-                $this->getLogger()->info("Response Body from dibbs:");
-                $this->getLogger()->info($content);
+                $this->getLogger()->info(
+                    "Sending request to dibs integration: PUT $endpoint",
+                    [
+                        'request' => $request->toJSON(),
+                        'headers' => $result->getHeaders(),
+                        'response' => $content,
+                    ]
+                );
             }
 
             return $content;
@@ -200,12 +205,15 @@ abstract class Client
         }
 
         if ($exception) {
-            $this->getLogger()->error("Failed sending request to dibs integration: PUT $endpoint");
-            $this->getLogger()->error(json_encode($this->removeAuthForLogging($options)));
-            $this->getLogger()->error($request->toJSON());
-            $this->getLogger()->error($exception->getMessage());
-            $this->getLogger()->error($exception->getHttpStatusCode());
-            $this->getLogger()->error($exception->getResponseBody());
+            $this->getLogger()->error(
+                "Failed sending request to dibs integration: PUT $endpoint - " . $exception->getMessage(),
+                [
+                    'options' => $this->removeAuthForLogging($options),
+                    'request' => $request->toJSON(),
+                    'status_code' => $exception->getHttpStatusCode(),
+                    'response' => $exception->getResponseBody(),
+                ]
+            );
             throw $exception;
         }
     }

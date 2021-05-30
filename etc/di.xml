@@ -29,4 +29,10 @@
     <type name="Magento\Checkout\Block\Cart">
         <plugin name="dibscheckout_url" type="Dibs\EasyCheckout\Plugin\Url" sortOrder="10" disabled="false"/>
     </type>
+
+    <type name="Dibs\EasyCheckout\Model\Checkout">
+        <arguments>
+            <argument name="logger" xsi:type="object">Dibs\EasyCheckout\Logger\Logger</argument>
+        </arguments>
+    </type>
 </config>

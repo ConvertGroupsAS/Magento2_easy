@@ -96,6 +96,7 @@ abstract class Checkout extends Action
         //check if cart was updated
         $currkey    = $this->getDibsCheckout()->getQuoteSignature();
         if($currkey != $ctrlkey) {
+            $this->dibsCheckout->getLogger()->error('AJAX key incorrect', ['signature' => $currkey, 'ctrlkey' => $ctrlkey]);
             $response = array(
                 'reload'   => 1,
                 'messages' =>(string)__('The cart was updated (from another location), reloading the checkout, please wait...')

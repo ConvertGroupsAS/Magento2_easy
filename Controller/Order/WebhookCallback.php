@@ -68,11 +68,25 @@ class WebhookCallback extends Checkout
 
 
         if (!isset($data['event']) || $data['event'] !== CreatePaymentWebhook::EVENT_PAYMENT_CHECKOUT_COMPLETED || !isset($data['data']['paymentId'])){
+            $this->logger->info(
+                'Webhook skip',
+                [
+                    'event' => $data['event'] ?? null,
+                    'payment_id' => $data['data']['paymentId'] ?? null,
+                    'quote_id' => $quoteId,
+                    'response_code' => 200,
+                ]
+            );
             $result->setHttpResponseCode(200);
             return $result;
         }
 
         $paymentId = $data['data']['paymentId'];
+
+        $logContext = [
+            'payment_id' => $paymentId,
+            'quote_id' => $quoteId,
+        ];
 
         $checkout = $this->getDibsCheckout();
         $checkout->setCheckoutContext($this->dibsCheckoutContext);
@@ -81,6 +95,7 @@ class WebhookCallback extends Checkout
         // validate authorization
         $ourSecret = $checkout->getHelper()->getWebhookSecret();
         if ($ourSecret && $ourSecret != $this->getRequest()->getHeader("Authorization")) {
+            $this->logger->warning('Webhook error - bad secret', $logContext + ['response_code' => 401]);
             $result->setHttpResponseCode(401);
             return $result;
         }
@@ -88,6 +103,7 @@ class WebhookCallback extends Checkout
         try {
             $quote = $this->loadQuote($quoteId);
         } catch (\Exception $e) {
+            $this->logger->error('Webhook error - cannot load quote - ' . $e->getMessage(), $logContext + ['response_code' => 500]);
             $this->logger->error($e);
 
             // maybe magento is down?
@@ -98,7 +114,7 @@ class WebhookCallback extends Checkout
         try {
             $dibsPayment = $checkout->getDibsPaymentHandler()->loadDibsPaymentById($paymentId);
         } catch (\Exception $e) {
-            $this->logger->error("Could not load dibs payment (id: " . $paymentId . ") for quote (id: ".$quoteId.")");
+            $this->logger->error("Webhook error - Could not load dibs payment - " . $e->getMessage(), $logContext + ['response_code' => 500]);
             $this->logger->error($e);
 
             // maybe nets is down
@@ -108,7 +124,10 @@ class WebhookCallback extends Checkout
 
         // we check that its the correct quote
         if ($checkout->getDibsPaymentHandler()->generateReferenceByQuoteId($quoteId) !== $dibsPayment->getOrderDetails()->getReference()) {
-
+            $this->logger->error('Webhook error - reference mismatch', $logContext + [
+                'reference' => $dibsPayment->getOrderDetails()->getReference(),
+                'response_code' => 200,
+            ]);
             // either its wrong, or order has been placed already! (since we update reference when order is placed to magento order id)
             $result->setHttpResponseCode(200);
             return $result;
@@ -136,35 +155,45 @@ class WebhookCallback extends Checkout
             ->count();
 
         if ($ordersCount > 0) {
+            $this->logger->info('Webhook skip - order already created', $logContext + ['response_code' => 200]);
             $result->setHttpResponseCode(200);
             return $result;
         }
 
+        $this->logger->info('Webhook - placing order', $logContext);
         try {
             $order = $checkout->placeOrder($dibsPayment, $quote, $weHandleConsumerData, false);
         } catch (\Exception $e) {
-            $this->logger->error("Could not place order for dibs payment with payment id: " . $dibsPayment->getPaymentId() . ", Quote ID:" . $quote->getId());
-            $this->logger->error("Error message:" . $e->getMessage());
+            $this->logger->error(
+                "Webhook error - Could not place order  - " . $e->getMessage(),
+                $logContext + [
+                    'trace' => (string)$e,
+                    'response_code' => 500,
+                ]
+            );
 
 
             $result->setHttpResponseCode(500);
             return $result;
         }
 
+        $logContext['order_id'] = $order->getId();
+        $logContext['order_increment'] = $order->getIncrementId();
+
         try {
+            $this->logger->info('Webhook - updating payment reference', $logContext);
             $checkout->getDibsPaymentHandler()->updateMagentoPaymentReference($order, $paymentId, $changeUrl);
         } catch (\Exception $e) {
-            $this->getLogger()->error(
-                "
-                Order created with ID: " . $order->getIncrementId() . ". 
-                But we could not update reference ID at dibs. Please handle it manually, it has id: quote_id_: " . $quote->getId() . "...  Dibs Payment ID: " . $paymentId
+            $this->logger->error(
+                'Webhook error - cannot update payment reference - ' . $e->getMessage(),
+                $logContext + ['response_code' => 200]
             );
 
             // lets ignore this and save it in logs! let customer see his/her order confirmation!
-            $this->getLogger()->error("Error message:" . $e->getMessage());
-
             // ... ignore this error...
         }
+
+        $this->logger->info('Webhook success', $logContext + ['response_code' => 200]);
 
         $result->setHttpResponseCode(200);
         return $result;
@@ -188,12 +217,12 @@ class WebhookCallback extends Checkout
      */
     protected function loadQuote($quoteId)
     {
-        try {
+//        try {
             $quote = $this->loadQuoteById($quoteId);
-        } catch (\Exception $e) {
-            $this->logger->error("Webhook: We found no quote for this Nets Payment.");
-            throw new \Exception("Found no quote object for this Nets Payment ID.");
-        }
+//        } catch (\Exception $e) {
+//            $this->logger->error("Webhook: We found no quote for this Nets Payment.");
+//            throw new \Exception("Found no quote object for this Nets Payment ID.");
+//        }
 
         return $quote;
     }

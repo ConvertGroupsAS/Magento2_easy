@@ -73,13 +73,20 @@ class GetShippingMethod extends Update
         $postalCode = (string)$this->getRequest()->getParam('postal');
         $postalCode = preg_replace("/[^0-9]/", "", $postalCode);
 
+        $logContext = [
+            'country' => $countryId,
+            'postcode' => $postalCode,
+        ];
+
         if (!$postalCode) {
-            $this->getResponse()->setBody(json_encode(array('messages' => 'Please choose a valid Postal code.')));
+            $this->dibsCheckout->getLogger()->warning('Get shipping method error - no postcode', $logContext);
+            $this->getResponse()->setBody(json_encode(array('messages' => __('Please choose a valid Postal code.'))));
             return;
         }
 
         if (!$this->validateCountryId($countryId)) {
-            $this->getResponse()->setBody(json_encode(array('messages' => 'Please select a Valid Country.')));
+            $this->dibsCheckout->getLogger()->warning('Get shipping method error - invalid country', $logContext);
+            $this->getResponse()->setBody(json_encode(array('messages' => __('Please select a Valid Country.'))));
             return;
         }
 
@@ -89,6 +96,7 @@ class GetShippingMethod extends Update
             return;
         }*/
 
+        $this->dibsCheckout->getLogger()->info('Get shipping method - start', $logContext);
         if ($postalCode) {
             try {
                 $quote = $this->getDibsCheckout()->getQuote();
@@ -104,11 +112,19 @@ class GetShippingMethod extends Update
                 // save!
                 $quote->save();
             } catch (\Magento\Framework\Exception\LocalizedException $e) {
+                $this->dibsCheckout->getLogger()->error(
+                    'Get shipping method error - ' . $e->getMessage(),
+                    $logContext + ['trace' => (string)$e]
+                );
                 $this->messageManager->addExceptionMessage(
                     $e,
                     $e->getMessage()
                 );
             } catch (\Exception $e) {
+                $this->dibsCheckout->getLogger()->error(
+                    'Get shipping method error - ' . $e->getMessage(),
+                    $logContext + ['trace' => (string)$e]
+                );
                 $this->messageManager->addExceptionMessage(
                     $e,
                     __('We can\'t update your Country / postal code.')

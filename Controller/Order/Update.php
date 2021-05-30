@@ -56,6 +56,7 @@ abstract class Update extends \Dibs\EasyCheckout\Controller\Checkout
                     $checkout->updateDibsPayment($dibsPaymentId);
                 }
             } catch (CheckoutException $e) {
+                $this->dibsCheckout->getLogger()->error('Update response error - ' . $e->getMessage());
                 $this->messageManager->addExceptionMessage(
                     $e,
                     $e->getMessage()
@@ -72,9 +73,17 @@ abstract class Update extends \Dibs\EasyCheckout\Controller\Checkout
                     $this->messageManager->addErrorMessage($e->getMessage());
                 }
             } catch (\Magento\Framework\Exception\LocalizedException $e) {
+                $this->dibsCheckout->getLogger()->error(
+                    'Update response error - ' . $e->getMessage(),
+                    ['trace' => (string)$e]
+                );
                 //do nothing, we will just show the message
                 $this->messageManager->addErrorMessage($e->getMessage() ? $e->getMessage() : __('Cannot update checkout (%1)', get_class($e)));
             } catch (\Exception $e) {
+                $this->dibsCheckout->getLogger()->error(
+                    'Update response error - ' . $e->getMessage(),
+                    ['trace' => (string)$e]
+                );
                 $this->messageManager->addErrorMessage($e->getMessage() ? $e->getMessage() : __('Cannot initialize Dibs Checkout (%1)', get_class($e)));
             }
 

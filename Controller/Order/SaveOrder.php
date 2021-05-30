@@ -23,12 +23,22 @@ class SaveOrder extends Checkout
         //$ctrlkey    = (string)$this->getRequest()->getParam('ctrlkey');
         $paymentId  = $this->getRequest()->getParam('pid');
 
+        $logContext = [
+            'payment_id' => $paymentId,
+        ];
+        $checkout->getLogger()->info('Save order start', $logContext);
+
         try {
             $orderPlaced = $checkout->tryToSaveDibsPayment($paymentId);
         } catch (CheckoutException $e) {
+            $checkout->getLogger()->error(
+                'Save order - try to save dibs payment soft error - ' . $e->getMessage(), $logContext);
             return $this->respondWithError($e->getMessage());
         } catch (\Exception $e) {
-            $checkout->getLogger()->error($e->getMessage());
+            $checkout->getLogger()->error(
+                'Save order - try to save dibs payment hard error - ' . $e->getMessage(),
+                $logContext + ['trace' => (string)$e]
+            );
             return $this->respondWithError("Something went wrong.");
         }
 

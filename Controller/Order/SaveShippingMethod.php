@@ -22,17 +22,29 @@ class SaveShippingMethod extends \Dibs\EasyCheckout\Controller\Order\Update
             return;
         }
 
+        $logContext = [
+            'shipping_method' => $shippingMethod,
+        ];
 
         if ($shippingMethod) {
+            $this->dibsCheckout->getLogger()->info('Update shipping method - start', $logContext);
             try {
                 $checkout = $this->getDibsCheckout();
                 $checkout->updateShippingMethod($shippingMethod);
             } catch (\Magento\Framework\Exception\LocalizedException $e) {
+                $this->dibsCheckout->getLogger()->error(
+                    'Update shipping method error - ' . $e->getMessage(),
+                    $logContext + ['trace' => (string)$e]
+                );
                 $this->messageManager->addExceptionMessage(
                     $e,
                     $e->getMessage()
                 );
             } catch (\Exception $e) {
+                $this->dibsCheckout->getLogger()->error(
+                    'Update shipping method error - ' . $e->getMessage(),
+                    $logContext + ['trace' => (string)$e]
+                );
                 $this->messageManager->addExceptionMessage(
                     $e,
                     __('We can\'t update shipping method.')

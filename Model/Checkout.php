@@ -461,35 +461,40 @@ class Checkout extends \Magento\Checkout\Model\Type\Onepage
 
         $checkoutPaymentId = $session->getDibsPaymentId();
 
+        $logContext = [
+            'payment_id' => $checkoutPaymentId,
+        ];
+
         if (!$quote) {
+            $this->_logger->warning('tryToSaveDibsPayment error - no quote', $logContext);
             return $this->throwRedirectToCartException(__("Your session has expired. Quote missing."));
         }
 
         if (!$paymentId || !$checkoutPaymentId || ($paymentId != $checkoutPaymentId)) {
-            $this->getLogger()->error("Invalid request");
+            $this->getLogger()->error("tryToSaveDibsPayment error - Invalid request", $logContext + [
+                'checkout_payment_id' => $checkoutPaymentId,
+            ]);
             if (!$checkoutPaymentId) {
-                $this->getLogger()->error("Save Order: No dibs checkout payment id in session.");
                 return $this->throwRedirectToCartException(__("Your session has expired."));
             }
 
             if ($paymentId != $checkoutPaymentId) {
-                return $this->getLogger()->error("Save Order: The session has expired or is wrong.");
+                return $this->throwRedirectToCartException("Save Order: The session has expired or is wrong.");
             }
 
-            return $this->getLogger()->error("Save Order: Invalid data.");
+            return $this->throwRedirectToCartException("Save Order: Invalid data.");
         }
 
         try {
             $payment = $this->getDibsPaymentHandler()->loadDibsPaymentById($paymentId);
         } catch (ClientException $e) {
+            $this->getLogger()->error("tryToSaveDibsPayment error - " . $e->getMessage(), $logContext + [
+                'status_code' => $e->getHttpStatusCode(),
+                'response' => $e->getResponseBody(),
+            ]);
             if ($e->getHttpStatusCode() == 404) {
-                $this->getLogger()->error("Save Order: The dibs payment with ID: " . $paymentId . " was not found in dibs.");
                 return $this->throwReloadException(__("Could not create an order. The payment was not found in dibs."));
             } else {
-                $this->getLogger()->error("Save Order: Something went wrong when we tried to fetch the payment ID from Dibs. Http Status code: " . $e->getHttpStatusCode());
-                $this->getLogger()->error("Error message:" . $e->getMessage());
-                $this->getLogger()->debug($e->getResponseBody());
-
                 return $this->throwReloadException(__("Could not create an order, please contact site admin. Dibs seems to be down!"));
             }
         } catch (\Exception $e) {
@@ -498,7 +503,10 @@ class Checkout extends \Magento\Checkout\Model\Type\Onepage
                 __('Something went wrong.')
             );
 
-            $this->getLogger()->error("Save Order: Something went wrong. Might have been the request parser. Payment ID: " . $checkoutPaymentId . "... Error message:" . $e->getMessage());
+            $this->getLogger()->error(
+                "tryToSaveDibsPayment error -  Something went wrong. Might have been the request parser. Payment ID: " . $checkoutPaymentId . "... Error message:" . $e->getMessage(),
+                $logContext
+            );
             return $this->throwReloadException(__("Something went wrong... Contact site admin."));
         }
 
@@ -536,44 +544,75 @@ class Checkout extends \Magento\Checkout\Model\Type\Onepage
             $createOrder = false;
         }
 
+        $logContext['has_order'] = (bool)$order;
+        $logContext['we_handle_consumer'] = $weHandleConsumerData;
+        $logContext['reference'] = $payment->getOrderDetails()->getReference();
+        $logContext['reserved_amount'] = $payment->getSummary()->getReservedAmount();
+        $logContext['charged_amount'] = $payment->getSummary()->getChargedAmount();
+
         if ($createOrder) {
             if ($payment->getOrderDetails()->getReference() !== $this->getDibsPaymentHandler()->generateReferenceByQuoteId($quote->getId())) {
-                $this->getLogger()->error("Save Order: The customer Quote ID doesn't match with the dibs payment reference: " . $payment->getOrderDetails()->getReference());
+                $this->getLogger()->error("tryToSaveDibsPayment - Save Order: The customer Quote ID doesn't match with the dibs payment reference: " . $payment->getOrderDetails()->getReference(), $logContext);
                 return $this->throwReloadException(__("Could not create an order. Invalid data. Contact admin."));
             }
 
             // In Swish there is no reserved amount?
             if ($payment->getSummary()->getReservedAmount() === null && $payment->getSummary()->getChargedAmount() === null) {
-                $this->getLogger()->error("Save Order: Found no summary for the payment id: " . $payment->getPaymentId() . "... This must mean that they customer hasn't checked out yet!");
+                $this->getLogger()->error("tryToSaveDibsPayment Save Order: Found no summary for the payment id: " . $payment->getPaymentId() . "... This must mean that they customer hasn't checked out yet!", $logContext);
                 return $this->throwReloadException(__("We could not create your order... No reserved or charged amount found. Payment id: %1", $payment->getPaymentId()));
             }
 
+            $this->_logger->info('tryToSaveDibsPayment - placing order', $logContext);
             try {
                 $order = $this->placeOrder($payment, $quote, $weHandleConsumerData);
             } catch (\Exception $e) {
-                $this->getLogger()->error("Could not place order for dibs payment with payment id: " . $payment->getPaymentId() . ", Quote ID:" . $quote->getId());
-                $this->getLogger()->error("Error message:" . $e->getMessage());
+                $this->getLogger()->error(
+                    "tryToSaveDibsPayment place order error - " . $e->getMessage(),
+                    $logContext + ['trace' => (string)$e]
+                );
 
                 return $this->throwReloadException(__("We could not create your order. Please contact the site admin with this error and payment id: %1", $payment->getPaymentId()));
             }
 
+            $logContext['order_id'] = $order->getId();
+            $logContext['order_increment'] = $order->getIncrementId();
+
             // Handle swish orders
             if ($this->isSwishPaymentValid($payment)) {
-                $this->handleSwishOrder($payment, $order);
+                $this->_logger->info('tryToSaveDibsPayment - handle swish order', $logContext);
+                try {
+                    $this->handleSwishOrder($payment, $order);
+                } catch (\Exception $e) {
+                    $this->_logger->error(
+                        'tryToSaveDibsPayment error swish order - ' . $e->getMessage(),
+                        $logContext + ['trace' => (string)$e]
+                    );
+                    // don't throw. we can invoice later
+                }
             }
+
+            $logContext['order_status'] = $order->getstatus();
 
             try {
                 $this->updateMagentoPaymentReference($order, $paymentId, $changeUrl);
             } catch (\Exception $e) {
                 $this->getLogger()->error(
-                    "
-                    Order created with ID: " . $order->getIncrementId() . ". 
-                    But we could not update reference ID at dibs. Please handle it manually, it has id: quote_id_: " . $quote->getId() . "...  Dibs Payment ID: " . $payment->getPaymentId()
+                    "tryToSaveDibsPayment update reference error - " . $e->getMessage() . "
+                    Order created with ID: " . $order->getIncrementId() . ".
+                    But we could not update reference ID at dibs. Please handle it manually",
+                    $logContext
                 );
 
                 // lets ignore this and save it in logs! let customer see his/her order confirmation!
                 $this->getLogger()->error("Error message:" . $e->getMessage());
             }
+
+            $this->_logger->info('tryToSaveDibsPayment success', $logContext);
+        } else {
+            $logContext['order_id'] = $order->getId();
+            $logContext['order_increment'] = $order->getIncrementId();
+            $logContext['order_status'] = $order->getStatus();
+            $this->_logger->info('tryToSaveDibsPayment - already created', $logContext);
         }
 
         // clear old sessions
@@ -596,7 +635,7 @@ class Checkout extends \Magento\Checkout\Model\Type\Onepage
      * @param Quote $quote
      * @param bool $weHandleConsumer
      * @param bool $setSessionOrderId
-     * @return mixed
+     * @return \Magento\Sales\Model\Order
      * @throws \Exception
      */
     public function placeOrder(GetPaymentResponse $dibsPayment, Quote $quote, $weHandleConsumer = false, $setSessionOrderId = true)
