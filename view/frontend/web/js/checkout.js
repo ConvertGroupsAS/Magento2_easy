@@ -6,10 +6,10 @@
 /*global alert*/
 define([
     "jquery",
-    'Magento_Ui/js/modal/alert',
+    'Convert_IdeDibsEasyCheckout/js/modal/alert',// patch 'Magento_Ui/js/modal/alert',
     'Magento_Checkout/js/model/quote',
     'uiRegistry',
-    "jquery/ui",
+    'jquery-ui-modules/widget',// patch
     "mage/translate",
     "mage/mage",
     "mage/validation"
