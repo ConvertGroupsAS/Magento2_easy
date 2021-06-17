@@ -178,6 +178,7 @@ define([
 
         _bindEvents: function (block) {
             //$blocks = ['shipping_method','cart','coupon','messages', 'dibs','newsletter'];
+            jQuery(this.options.getShippingMethodButton).attr('disabled', false)
 
             block = block ? block : null;
             if (!block || block == 'shipping') {
@@ -346,7 +347,7 @@ define([
                                 window.location.reload();
                             }
                             return true;
-                        } //end redirect   
+                        } //end redirect
 
                         //ctlKeyy Cookie
                         if (response.ctrlkey) {

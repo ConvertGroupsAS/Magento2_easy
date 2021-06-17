@@ -29,7 +29,8 @@ $shippingAddress = $quote->getShippingAddress();
                    placeholder="<?php echo __('Postal code') ?>"
                    value="<?= ($shippingAddress === null || !$shippingAddress->getPostcode()) ? __('') : $shippingAddress->getPostcode() ?>" autofocus />
             <button type="submit" id="shipping-method-button"
-                    class="action dibs-primary" title="<?php echo __('Choose Delivery'); ?>">
+                    class="action dibs-primary" title="<?php echo __('Choose Delivery'); ?>"
+                    disabled="disabled">
                 <span><?php echo __('Choose Delivery'); ?></span>
             </button>
         </form>
