@@ -252,8 +252,8 @@ class Items
                     ->setName($itemName)
                     ->setUnit("st")
                     ->setQuantity(round($qty, 0))
-                    ->setTaxRate($this->addZeroes($vat)) // the tax rate i.e 25% (2500)
-                    ->setTaxAmount($this->addZeroes($this->getTotalTaxAmount($unitPrice * $qty, $vat, false))) // total tax amount
+                    ->setTaxRate($vat)
+                    ->setTaxAmount($this->getTotalTaxAmount($unitPrice * $qty, $vat, false)) // total tax amount
                     ->setUnitPrice((int) $unitPriceExclTax) // excl. tax price per item
                     ->setNetTotalAmount((int) ($unitPriceExclTax * $qty)) // excl. tax
                     ->setGrossTotalAmount((int) ($unitPrice * $qty)); // incl. tax
@@ -329,8 +329,8 @@ class Items
             ->setName((string)__('Shipping Fee (%1)', $address->getShippingDescription()))
             ->setUnit("st") // TODO! We need to map these somehow!
             ->setQuantity(1)
-            ->setTaxRate($this->addZeroes($vat)) // the tax rate i.e 25% (2500)
-            ->setTaxAmount($this->addZeroes($taxAmount)) // total tax amount
+            ->setTaxRate($vat)
+            ->setTaxAmount($taxAmount) // total tax amount
             ->setUnitPrice($this->addZeroes($exclTax)) // excl. tax price per item
             ->setNetTotalAmount($this->addZeroes($exclTax)) // excl. tax
             ->setGrossTotalAmount($this->addZeroes($inclTax)); // incl. tax
@@ -428,13 +428,13 @@ class Items
         $feeItem
             ->setName($invoiceLabel)
             ->setReference(strtolower(str_replace(" ", "_", $invoiceLabel)))
-            ->setTaxRate($this->addZeroes($taxRate))
+            ->setTaxRate($taxRate)
             ->setGrossTotalAmount($this->addZeroes($invoiceFeeInclTax)) // incl tax
             ->setNetTotalAmount($this->addZeroes($invoiceFeeExclTax)) // // excl. tax
             ->setUnit("st")
             ->setQuantity(1)
             ->setUnitPrice($this->addZeroes($invoiceFeeExclTax)) // // excl. tax
-            ->setTaxAmount($this->addZeroes($taxAmount)); // tax amount
+            ->setTaxAmount($taxAmount); // tax amount
 
         return $feeItem;
     }
@@ -456,7 +456,7 @@ class Items
             //var_dump($amount);
             //die;
 
-            $taxAmount = $this->getTotalTaxAmount($amountInclTax, $vat);
+            $taxAmount = $this->getTotalTaxAmount($amountInclTax, $vat, false);
             $amountInclTax = $this->addZeroes($amountInclTax);
             $amountExclTax = $amountInclTax - $taxAmount;
 
@@ -466,7 +466,7 @@ class Items
                 ->setName($couponCode ? (string)__('Discount (%1)', $couponCode) : (string)__('Discount'))
                 ->setUnit("st")
                 ->setQuantity(1)
-                ->setTaxRate($this->addZeroes($vat)) // the tax rate i.e 25% (2500)
+                ->setTaxRate($vat)
                 ->setTaxAmount($taxAmount) // total tax amount
                 ->setUnitPrice(0) // excl. tax price per item
                 ->setNetTotalAmount(-$amountExclTax) // excl. tax
